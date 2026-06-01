@@ -1,6 +1,7 @@
+# syntax=docker/dockerfile:1
 ARG PHP_VERSION
-ARG BREF_VERSION
-FROM bref/build-php-$PHP_VERSION:$BREF_VERSION AS ext
+ARG BREF_VERSION=3
+FROM --platform=linux/amd64 bref/build-php-${PHP_VERSION}:${BREF_VERSION} AS ext
 
 ENV V8JS_BUILD_DIR=${BUILD_DIR}/v8js
 ENV V8_VERSION=12.0.267.36
@@ -26,16 +27,19 @@ RUN git clone --depth 1 https://chromium.googlesource.com/chromium/tools/depot_t
 ENV PATH="${V8JS_BUILD_DIR}/depot_tools:${PATH}"
 ENV DEPOT_TOOLS_UPDATE=0
 
-RUN fetch v8
+RUN fetch --no-history v8
+
 WORKDIR ${V8JS_BUILD_DIR}/v8
-RUN git checkout ${V8_VERSION} && gclient sync -D
+RUN git checkout ${V8_VERSION} && gclient sync -D --no-history
+
 RUN tools/dev/v8gen.py -vv x64.release -- is_component_build=true use_custom_libcxx=false
 RUN ninja -C out.gn/x64.release/
 
 RUN mkdir -p ${V8_DIR}/lib ${V8_DIR}/include && \
     cp out.gn/x64.release/lib*.so out.gn/x64.release/*_blob.bin out.gn/x64.release/icudtl.dat ${V8_DIR}/lib/ && \
     cp -R include/* ${V8_DIR}/include/ && \
-    for f in ${V8_DIR}/lib/*.so; do patchelf --set-rpath '$ORIGIN' "$f"; done
+    for f in ${V8_DIR}/lib/*.so; do patchelf --set-rpath '$ORIGIN' "$f"; done && \
+    rm -rf ${V8JS_BUILD_DIR}/v8 ${V8JS_BUILD_DIR}/depot_tools
 
 WORKDIR ${V8JS_BUILD_DIR}
 RUN curl -Ls https://github.com/phpv8/v8js/archive/${V8JS_COMMIT}.tar.gz | tar xz
