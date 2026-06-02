@@ -1,0 +1,98 @@
+name: Export v8js artifacts
+
+on:
+  workflow_dispatch:
+    inputs:
+      php_version:
+        description: PHP version to build
+        required: true
+        default: '84'
+        type: choice
+        options:
+          - '82'
+          - '83'
+          - '84'
+      skip_test:
+        description: Skip tests (only if CI already passed for this commit)
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  export:
+    name: Export v8js PHP ${{ inputs.php_version }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    env:
+      DOCKER_BUILDKIT: '1'
+      PHP_VERSION: ${{ inputs.php_version }}
+
+    steps:
+      - name: Maximize build disk space
+        uses: easimon/maximize-build-space@v10
+        with:
+          root-reserve-mb: 2048
+          swap-size-mb: 1024
+          remove-dotnet: 'true'
+          remove-android: 'true'
+          remove-haskell: 'true'
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Show available disk space
+        run: df -h
+
+      - name: Clean export directory
+        run: make clean
+
+      - name: Build docker image
+        run: layer=v8js php_versions=${{ env.PHP_VERSION }} make docker-images
+
+      - name: Test layer
+        if: github.event.inputs.skip_test != 'true'
+        run: layer=v8js php_versions=${{ env.PHP_VERSION }} make test
+
+      - name: Export layer zip
+        run: layer=v8js php_versions=${{ env.PHP_VERSION }} make layers
+
+      - name: Save Docker image for local use
+        run: |
+          docker save "bref/layers/v8js-php-${{ env.PHP_VERSION }}" | gzip -1 > "export/v8js-docker-image-php-${{ env.PHP_VERSION }}.tar.gz"
+
+      - name: Write usage notes
+        run: |
+          cat > export/README.txt << EOF
+          v8js build artifacts (PHP ${{ env.PHP_VERSION }})
+          =============================================
+
+          1) Lambda layer zip
+             File: layer-v8js-php-${{ env.PHP_VERSION }}.zip
+             Publish when ready:
+               aws lambda publish-layer-version \\
+                 --layer-name v8js-php-${{ env.PHP_VERSION }} \\
+                 --compatible-runtimes provided.al2 \\
+                 --zip-file fileb://layer-v8js-php-${{ env.PHP_VERSION }}.zip \\
+                 --region YOUR_REGION
+
+          2) Docker image (for local development)
+             File: v8js-docker-image-php-${{ env.PHP_VERSION }}.tar.gz
+
+             docker load -i v8js-docker-image-php-${{ env.PHP_VERSION }}.tar.gz
+
+             In your app Dockerfile (match PHP version):
+               FROM bref/php-${{ env.PHP_VERSION }}-fpm-dev:3
+               COPY --from=bref/layers/v8js-php-${{ env.PHP_VERSION }} /opt /opt
+
+          CI only builds and tests; it does not export these files.
+          EOF
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: v8js-php-${{ env.PHP_VERSION }}-${{ github.run_number }}
+          path: |
+            export/layer-v8js-php-${{ env.PHP_VERSION }}.zip
+            export/v8js-docker-image-php-${{ env.PHP_VERSION }}.tar.gz
+            export/README.txt
+          retention-days: 30
