@@ -31,7 +31,6 @@ jobs:
       - name: Maximize build disk space
         uses: easimon/maximize-build-space@v10
         with:
-          build-mount-path: /var/lib/docker
           root-reserve-mb: 512
           swap-size-mb: 1024
           remove-dotnet: 'true'
@@ -43,11 +42,19 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Point Docker storage at build volume
+        run: |
+          sudo systemctl stop docker docker.socket containerd || true
+          sudo mkdir -p "${GITHUB_WORKSPACE}/docker"
+          echo "{\"data-root\": \"${GITHUB_WORKSPACE}/docker\"}" | sudo tee /etc/docker/daemon.json
+          sudo systemctl start docker
+          sleep 3
+          docker info | grep -E "Docker Root Dir|Storage Driver"
+
       - name: Show available disk space
         run: |
           df -h
-          docker info 2>/dev/null | grep "Docker Root Dir" || true
-          docker system df 2>/dev/null || true
+          docker system df
 
       - name: Clean export directory
         run: make clean
