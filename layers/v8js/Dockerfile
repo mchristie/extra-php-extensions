@@ -55,6 +55,10 @@ RUN echo 'extension=v8js.so' > /tmp/ext.ini
 RUN php /bref/lib-copy/copy-dependencies.php /tmp/v8js.so /tmp/extension-libs
 RUN cp ${V8_DIR}/lib/libv8*.so ${V8_DIR}/lib/icudtl.dat ${V8_DIR}/lib/*_blob.bin /tmp/extension-libs/
 
+RUN cp -L /lib64/libstdc++.so.6 /lib64/libgcc_s.so.1 /tmp/extension-libs/
+RUN patchelf --set-rpath '$ORIGIN/../../lib' /tmp/v8js.so
+RUN for f in /tmp/extension-libs/*.so; do patchelf --set-rpath '$ORIGIN' "$f"; done
+
 FROM scratch
 
 COPY --from=ext /tmp/v8js.so /opt/bref/extensions/v8js.so

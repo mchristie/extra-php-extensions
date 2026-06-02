@@ -84,7 +84,7 @@ jobs:
              Publish when ready:
                aws lambda publish-layer-version \\
                  --layer-name v8js-php-${{ env.PHP_VERSION }} \\
-                 --compatible-runtimes provided.al2 \\
+                 --compatible-runtimes provided.al2023 \\
                  --zip-file fileb://layer-v8js-php-${{ env.PHP_VERSION }}.zip \\
                  --region YOUR_REGION
 
@@ -93,8 +93,11 @@ jobs:
 
              docker load -i v8js-docker-image-php-${{ env.PHP_VERSION }}.tar.gz
 
+             Requires Bref 3 / Amazon Linux 2023 (glibc 2.34+).
+             Not compatible with bref/php-*-fpm-dev:latest (Amazon Linux 2).
+
              In your app Dockerfile (match PHP version):
-               FROM bref/php-${{ env.PHP_VERSION }}-fpm-dev:3
+               FROM bref/php-${{ env.PHP_VERSION }}-dev:3
                COPY --from=bref/layers/v8js-php-${{ env.PHP_VERSION }} /opt /opt
 
           CI only builds and tests; it does not export these files.
