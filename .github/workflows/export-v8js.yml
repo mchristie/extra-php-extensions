@@ -31,17 +31,23 @@ jobs:
       - name: Maximize build disk space
         uses: easimon/maximize-build-space@v10
         with:
-          root-reserve-mb: 2048
+          build-mount-path: /var/lib/docker
+          root-reserve-mb: 512
           swap-size-mb: 1024
           remove-dotnet: 'true'
           remove-android: 'true'
           remove-haskell: 'true'
+          remove-codeql: 'true'
+          remove-docker-images: 'true'
 
       - name: Checkout code
         uses: actions/checkout@v4
 
       - name: Show available disk space
-        run: df -h
+        run: |
+          df -h
+          docker info 2>/dev/null | grep "Docker Root Dir" || true
+          docker system df 2>/dev/null || true
 
       - name: Clean export directory
         run: make clean
